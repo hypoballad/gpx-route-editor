@@ -102,6 +102,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .reference-files > li, .reference-detail { display: grid; gap: 4px; padding: 9px; border: 1px solid var(--line); border-radius: 7px; }
 .reference-file, .reference-link, .reference-filters label { display: flex; align-items: center; gap: 6px; }
 .reference-file { font-weight: 700; }
+.reference-routing { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .reference-file > :last-child { min-width: 0; }
 .reference-swatch { display: flex; align-items: center; width: 35px; flex: none; }
 .reference-swatch > span { display: block; width: 100%; }
@@ -184,6 +185,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .manual .line-key { border-top-style: dashed; }
 .point-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; }
 .point-actions button { min-width: 30px; padding-inline: 5px; }
+.point-actions button[aria-pressed="true"] { background: #e1ecdc; border-color: #aabcaa; }
+.transfer-tag { margin-left: auto; white-space: nowrap; }
 .delete { color: #8d3d29; }
 .section-panel { margin: 0 21px 15px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: #f5f6ef; }
 .section-title, .section-actions, .snap-review { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }

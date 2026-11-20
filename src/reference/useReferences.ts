@@ -103,6 +103,7 @@ export function useReferences(viewport?: Bounds) {
     ? layer.lines.map((points) => ({ points, layerId: layer.id })) : []), [layers]);
   const lineStyles = useMemo(() => styledLayers.filter((layer) => layer.visible && layer.lines.length)
     .map(({ id, lineStyle }) => ({ id, ...lineStyle })), [styledLayers]);
+  const routingLayers = useMemo(() => layers.filter((layer) => layer.visible && layer.routable && layer.format === 'gpx'), [layers]);
   const displayed = useMemo(() => {
     const places = new Map<string, Place>();
     for (const layer of layers) {
@@ -125,7 +126,7 @@ export function useReferences(viewport?: Bounds) {
     [onlyHere, viewport, places]);
 
   return {
-    layers: styledLayers, saved, savedKeys, showSaved, setShowSaved, category, setCategory, onlyHere, setOnlyHere,
+    layers: styledLayers, routingLayers, saved, savedKeys, showSaved, setShowSaved, category, setCategory, onlyHere, setOnlyHere,
     categories, lines, lineStyles, places, listed, message, busy, addFiles, loadLink, search, setSearch,
     changeLineStyle: (id: string, style: LineStyle) => setLineOverrides((previous) => new Map(previous).set(id, style)),
     useLineDefault: (style: LineStyle) => {
@@ -140,6 +141,8 @@ export function useReferences(viewport?: Bounds) {
     },
     toggleLayer: (id: string) => setLayers((previous) =>
       previous.map((layer) => layer.id === id ? { ...layer, visible: !layer.visible } : layer)),
+    toggleRouting: (id: string) => setLayers((previous) =>
+      previous.map((layer) => layer.id === id ? { ...layer, routable: !layer.routable } : layer)),
     removeLayer: (id: string) => {
       setLayers((previous) => previous.filter((layer) => layer.id !== id));
       setLineOverrides((previous) => {

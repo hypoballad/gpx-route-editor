@@ -18,6 +18,7 @@ import { Diagnostics } from './Diagnostics.tsx';
 import type { ExportAttempt } from './Diagnostics.tsx';
 import { isManualWaypoint } from '../reference/WaypointForm.tsx';
 import type { WaypointDraft } from '../reference/WaypointForm.tsx';
+import { ReferenceNetwork } from '../routing/referenceNetwork.ts';
 
 type Action = 'add' | 'browse' | 'move' | 'insert' | 'vertex' | 'place';
 type Side = 'from' | 'to';
@@ -29,6 +30,8 @@ const errors: Record<NonNullable<RouteResult['error']>, string> = {
   disconnected: '選んだ道同士はつながっていません。',
   'no-path': '通行方向の条件を満たす経路が見つかりません。',
   load: '探索用データを読み込めませんでした。',
+  'reference-link': '同じGPXの連続した線でつながりません。OSMへ移る場合は、両方の道の近くの経由地点を接続点に指定してください。',
+  'reference-choice': '大会GPXが重なる箇所です。始点・終点の吸着候補から、通る方を選んでください。',
 };
 
 function whereToInsert(line: Point[], click: Point) {
@@ -75,6 +78,7 @@ export function App() {
   const mapShell = useRef<HTMLElement>(null);
   const legEditor = useRef<HTMLElement>(null);
   const references = useReferences(viewport?.bounds);
+  const referenceNetwork = useMemo(() => new ReferenceNetwork(references.routingLayers), [references.routingLayers]);
   const mapPlaces = useMemo(() => {
     const manual = exportPlaces.filter(isManualWaypoint);
     if (!manual.length) return references.places;
@@ -83,7 +87,7 @@ export function App() {
   }, [references.places, exportPlaces]);
   const project = history.present;
   const roadBounds = showRoads && viewport && viewport.zoom >= ROAD_MIN_ZOOM ? viewport.bounds : undefined;
-  const { results, retry, roadResult } = useRoutes(project, roadBounds);
+  const { results, retry, roadResult } = useRoutes(project, referenceNetwork, roadBounds);
   const selected = project.legs.find((leg) => leg.id === legId) ?? project.legs.at(-1);
   const selectedIndex = selected ? project.legs.indexOf(selected) : -1;
   const activeRoute = results[selectedIndex];
@@ -146,7 +150,7 @@ export function App() {
     const title = kind === 'partial' ? label.slice(0, 100 - suffix.length) + suffix : label;
     let contents: string;
     try {
-      contents = toGpx(geometry, title, lines.some(({ mode }) => mode === 'auto'), exportPlaces);
+      contents = toGpx(geometry, title, results.some((result) => result?.points && !result.referenceName), exportPlaces);
     } catch {
       setExportAttempt({ kind, status: 'generation-error' });
       return;
@@ -268,7 +272,8 @@ export function App() {
   }
 
   const hint = {
-    add: roadResult?.roads.length ? '赤い道をクリックして経由地点を追加' : '地図をクリックして経由地点を追加',
+    add: references.routingLayers.length ? '参考GPXの線を優先して経由地点を追加'
+      : roadResult?.roads.length ? '赤い道をクリックして経由地点を追加' : '地図をクリックして経由地点を追加',
     browse: '地図を移動、地点をドラッグ',
     move: '地点の移動先をクリック',
     insert: '選んだ区間に挿入する地点をクリック',
@@ -356,17 +361,19 @@ export function App() {
               const leg = project.legs[index];
               const result = results[index];
               const length = leg && distances.get(leg.id);
+              const modeName = leg?.mode === 'manual' ? '手描き' : result?.referenceName ? '参考GPX' : '自動探索';
               return <li key={waypoint.id}>
                 <button type="button" className="point-row" aria-pressed={index === activeWaypoint}
                   onClick={() => selectWaypoint(waypoint.id)}>
                   <span className="number">{index + 1}</span>
                   <span><strong>{waypoint.name ?? (index === 0 ? '出発地点' : index === project.waypoints.length - 1 ? '到着地点' : `経由地点 ${index + 1}`)}</strong>
                     <small>{waypoint.point[1].toFixed(5)}, {waypoint.point[0].toFixed(5)}</small></span>
+                  {waypoint.transfer && <small className="transfer-tag">接続点</small>}
                 </button>
                 {leg && <button type="button" className={`leg-row ${leg.mode}`} aria-pressed={selected?.id === leg.id}
-                  aria-label={`区間 ${index + 1}：${leg.mode === 'manual' ? '手描き' : '自動探索'}`} onClick={() => selectLeg(leg.id)}>
+                  aria-label={`区間 ${index + 1}：${modeName}`} onClick={() => selectLeg(leg.id)}>
                   <span className="line-key" aria-hidden="true" />
-                  <span>{leg.mode === 'manual' ? '手描き' : '自動探索'}</span>
+                  <span>{modeName}</span>
                   <span className={result?.error ? 'error-text' : ''} data-testid={`leg-status-${index}`}>
                     {length !== undefined ? fileDistance(length) : result?.error ? '未解決' : '探索中…'}
                   </span>
@@ -376,6 +383,11 @@ export function App() {
           </ol>
           {activeWaypoint >= 0 && <div className="point-actions" aria-label="選択した経由地点">
             <button type="button" onClick={() => { setAction('move'); setCandidateSide(undefined); }}>地点を移動</button>
+            {(references.routingLayers.length > 0 || project.waypoints[activeWaypoint].transfer) && <button type="button"
+              aria-pressed={!!project.waypoints[activeWaypoint].transfer} onClick={() => {
+                commit((previous) => setWaypoints(previous, previous.waypoints.map((point) =>
+                  point.id === waypointId ? { ...point, transfer: !point.transfer } : point)));
+              }}>OSMとの接続点</button>}
             <button type="button" aria-label="地点を前へ" disabled={activeWaypoint === 0} onClick={() => changeWaypointOrder(-1)}>↑</button>
             <button type="button" aria-label="地点を後へ" disabled={activeWaypoint + 1 === project.waypoints.length} onClick={() => changeWaypointOrder(1)}>↓</button>
             <button type="button" className="delete" onClick={() => {
@@ -388,8 +400,11 @@ export function App() {
         </div>
         {selected && <section ref={legEditor} tabIndex={-1} className="section-panel" aria-label="選択した区間の編集">
           <div className="section-title"><h2>区間 {selectedIndex + 1}</h2>
-            <span className={`chip ${selected.mode}`}>{selected.mode === 'auto' ? '自動探索' : '手描き'}</span></div>
+            <span className={`chip ${selected.mode}`}>{selected.mode === 'manual' ? '手描き' : activeRoute?.referenceName ? '参考GPX' : '自動探索'}</span></div>
           {activeRoute?.error && <p className="error-text" role="status">{errors[activeRoute.error]}</p>}
+          {activeRoute?.referenceName && <p className="muted">参考GPX · {activeRoute.referenceName}</p>}
+          {(project.waypoints[selectedIndex].transfer || project.waypoints[selectedIndex + 1].transfer) &&
+            <p className="muted">接続点と道の間は、50 m以内の短い直線でつなぎます。</p>}
           {selected.mode === 'auto' && activeRoute?.points && guides.length > 0 && <p className="muted">紫の点線は入力地点から道への吸着を示します。</p>}
           <div className="section-actions">
             <button type="button" onClick={switchMode}>{selected.mode === 'auto' ? '手描きに切り替え' : '自動探索に戻す'}</button>
@@ -416,6 +431,7 @@ export function App() {
               {candidates.map((candidate) => <button type="button" key={candidate.id}
                 onClick={() => chooseCandidate(candidate.side, candidate.id)}>
                 候補 {candidate.label} · {candidate.meters.toFixed(0)} m{candidate.shorterRoute ? ' · 別経路あり' : ''}
+                {candidate.reference && ` · ${candidate.reference.name} · 線 ${candidate.reference.section} · 起点から ${fileDistance(candidate.reference.metersAlong)}`}
               </button>)}
             </div>}
           </div>}
@@ -440,6 +456,7 @@ export function App() {
       <section ref={mapShell} className="map-shell" aria-label="地図と地域切替">
         <TopoMap region={region} lines={lines} guides={guides}
           roads={roadResult?.roads ?? emptyRoads} onViewport={setViewport}
+          referenceNetwork={referenceNetwork}
           referenceLines={references.lines} referencePlaces={mapPlaces} savedPlaces={references.savedKeys}
           referenceStyles={references.lineStyles}
           selectedPlace={waypointDraft ? undefined : selectedPlace?.key} referenceFocus={referenceFocus} elevationPoint={elevationPoint}

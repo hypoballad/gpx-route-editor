@@ -82,6 +82,10 @@ export function ReferencePanel({ data, selected, exportPlaces, draft, onEditWayp
           <span>{layer.name}</span>
         </label>
         <small>線 {layer.lines.length} 本 · 地点 {layer.places.length} 件</small>
+        {layer.format === 'gpx' && layer.lines.length > 0 && <label className="reference-routing">
+          <input type="checkbox" checked={!!layer.routable} onChange={() => data.toggleRouting(layer.id)} />探索に使う
+          {layer.routable && !layer.visible && <small>（非表示のため一時停止）</small>}
+        </label>}
         <div className="reference-buttons">
           {layer.bounds && <button type="button" onClick={() => onFocus(layer.bounds!)}>全体表示</button>}
           {layer.lines.length > 0 && <button type="button" aria-expanded={styleEditor?.id === layer.id}

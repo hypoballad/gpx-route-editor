@@ -1,4 +1,4 @@
-import { contains, distance, lineLength, samePoint } from '../geo.ts';
+import { contains, distance, lineLength, projectToSegment, samePoint } from '../geo.ts';
 import type { Bounds, Point } from '../geo.ts';
 import type { Candidate, Road, RoadResult, RouteInput, RouteResult } from './protocol.ts';
 
@@ -99,18 +99,6 @@ function clipToBounds(a: Point, b: Point, bounds: Bounds): [Point, Point] | unde
     Math.max(bounds.south, Math.min(bounds.north, a[1] + fraction * (b[1] - a[1]))),
   ];
   return [at(start), at(end)];
-}
-
-function project(point: Point, a: Point, b: Point) {
-  const scale = Math.cos(point[1] * Math.PI / 180);
-  const dx = (b[0] - a[0]) * scale;
-  const dy = b[1] - a[1];
-  const square = dx * dx + dy * dy;
-  const position = square === 0 ? 0 : ((point[0] - a[0]) * scale * dx + (point[1] - a[1]) * dy) / square;
-  const fraction = Math.max(0, Math.min(1, position));
-  const projected: Point = fraction === 0 ? a : fraction === 1 ? b
-    : [a[0] + (b[0] - a[0]) * fraction, a[1] + dy * fraction];
-  return { fraction, projected };
 }
 
 class SegmentIndex {
@@ -235,7 +223,7 @@ class SegmentIndex {
           const id = `${a}:${b}`;
           if (visited.has(id)) continue;
           visited.add(id);
-          const { fraction, projected } = project(point, location(this.graph, a), location(this.graph, b));
+          const { fraction, projected } = projectToSegment(point, location(this.graph, a), location(this.graph, b));
           const meters = distance(point, projected);
           if (meters <= REVIEW_METERS) matches.push({
             id, a, b, fraction, point: projected, meters,

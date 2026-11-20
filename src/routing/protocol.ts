@@ -13,16 +13,20 @@ export type Manifest = {
   timestamp: string;
 };
 
-export type Candidate = { id: string; point: Point; meters: number; shorterRoute?: boolean };
+export type Candidate = {
+  id: string; point: Point; meters: number; shorterRoute?: boolean;
+  reference?: { name: string; section: number; metersAlong: number };
+};
 export type RouteInput = { from: Point; to: Point; fromChoice?: string; toChoice?: string };
 export type RouteResult = {
   points?: Point[];
-  error?: 'outside' | 'snap' | 'disconnected' | 'no-path' | 'load';
+  error?: 'outside' | 'snap' | 'disconnected' | 'no-path' | 'load' | 'reference-link' | 'reference-choice';
   fromOptions: Candidate[];
   toOptions: Candidate[];
   fromSnap?: Candidate;
   toSnap?: Candidate;
   graphVersion?: string;
+  referenceName?: string;
 };
 export type Road = { id: string; points: [Point, Point] };
 export type RoadResult = { roads: Road[]; limited?: boolean; error?: 'load' };

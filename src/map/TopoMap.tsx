@@ -9,6 +9,7 @@ import type { Candidate, Road } from '../routing/protocol.ts';
 import type { Place } from '../reference/import.ts';
 import { mapDashArray, referenceOutline } from '../reference/lineStyle.ts';
 import type { LineStyle } from '../reference/lineStyle.ts';
+import type { ReferenceNetwork } from '../routing/referenceNetwork.ts';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 
@@ -35,6 +36,7 @@ type Props = {
   roads: Road[];
   referenceLines: { points: Point[]; layerId: string }[];
   referenceStyles: (LineStyle & { id: string })[];
+  referenceNetwork: ReferenceNetwork;
   referencePlaces: Place[];
   savedPlaces: ReadonlySet<string>;
   selectedPlace?: string;
@@ -139,6 +141,11 @@ function pickRoad(instance: LibreMap, point: Point, roads: ReadonlyMap<string, R
   return best;
 }
 
+function pickReferenceRoad(instance: LibreMap, network: ReferenceNetwork, point: Point) {
+  const screen = instance.project(point);
+  return network.pick(point, (position) => instance.project(position).dist(screen) <= 8);
+}
+
 export function TopoMap(props: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<LibreMap | undefined>(undefined);
@@ -200,6 +207,11 @@ export function TopoMap(props: Props) {
       const point: Point = [event.lngLat.lng, event.lngLat.lat];
       if (current.placingWaypoint) {
         current.onClick(point);
+        return;
+      }
+      const course = current.snapRoads && pickReferenceRoad(instance, current.referenceNetwork, point);
+      if (course) {
+        current.onClick(course.point, course.id);
         return;
       }
       if (current.placeLookup.size && instance.getLayer('reference-places')) {
@@ -408,7 +420,10 @@ export function TopoMap(props: Props) {
         marker.on('dragend', () => {
           const { lng, lat } = marker.getLngLat();
           const point: Point = [lng, lat];
-          const road = item.key.startsWith('waypoint:') ? pickRoad(instance, point, latest.current.roadLookup, 8) : undefined;
+          const current = latest.current;
+          const road = item.key.startsWith('waypoint:')
+            ? pickReferenceRoad(instance, current.referenceNetwork, point) ?? pickRoad(instance, point, current.roadLookup, 8)
+            : undefined;
           if (road) marker.setLngLat(road.point);
           item.drag?.(road?.point ?? point, road?.id);
         });

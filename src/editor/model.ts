@@ -2,7 +2,7 @@ import type { Point } from '../geo.ts';
 import type { RouteInput } from '../routing/protocol.ts';
 
 export type Vertex = { id: string; point: Point };
-export type Waypoint = Vertex & { roadId?: string; name?: string };
+export type Waypoint = Vertex & { roadId?: string; name?: string; transfer?: boolean };
 export type Leg = {
   id: string;
   from: string;

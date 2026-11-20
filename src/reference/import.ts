@@ -19,7 +19,9 @@ export type Place = {
 export type ReferenceLayer = {
   id: string;
   name: string;
+  format: 'gpx' | 'kml';
   lineStyle: LineStyle;
+  routable?: boolean;
   visible: boolean;
   lines: Point[][];
   places: Place[];
@@ -165,7 +167,7 @@ export function readReference(markup: string, name: string, lineStyle: LineStyle
     throw new Error('表示できる線や地点が見つかりませんでした。');
   }
   return {
-    id: crypto.randomUUID(), name, lineStyle, visible: true,
+    id: crypto.randomUUID(), name, format: gpx ? 'gpx' : 'kml', lineStyle, visible: true,
     lines, places, bounds, links: [...links], unsupportedLinks,
   };
 }

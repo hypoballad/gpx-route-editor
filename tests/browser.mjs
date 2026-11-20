@@ -516,6 +516,46 @@ try {
   await waypointPage.getByRole('button', { name: '参考レイヤー', exact: true }).click();
   await waypointPage.getByRole('button', { name: /城山茶屋・入口/ }).waitFor();
   console.log('Manual waypoint: placed, edited, relocated, exported, saved and removed from current GPX');
+
+  const course = await desktop.newPage();
+  await loaded(course);
+  await course.getByRole('button', { name: '参考レイヤー', exact: true }).click();
+  await course.locator('input[type=file]').setInputFiles({
+    name: '大会コース.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`
+      <gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
+        <trkpt lon="138.993" lat="35.818"/><trkpt lon="139.000" lat="35.832"/>
+        <trkpt lon="139.007614" lat="35.82804"/>
+      </trkseg></trk></gpx>`),
+  });
+  await course.getByLabel('探索に使う').check();
+  await course.getByRole('button', { name: 'ルート編集', exact: true }).click();
+  await course.getByRole('button', { name: '奥多摩', exact: true }).click();
+  const graphRequests = [];
+  course.on('request', (request) => { if (request.url().includes('/graph/network-')) graphRequests.push(request.url()); });
+  await course.mouse.click(...await pixel(course, [138.993, 35.818], okutama));
+  await course.mouse.click(...await pixel(course, [139.007614, 35.82804], okutama));
+  await course.getByRole('button', { name: '区間 1：参考GPX', exact: true }).waitFor();
+  assert.deepEqual(graphRequests, []);
+  assert.equal(await course.locator('.map-pin.road-anchor').count(), 2);
+  const [courseFile] = await Promise.all([
+    course.waitForEvent('download'), course.getByRole('button', { name: /GPXを書き出す/ }).click(),
+  ]);
+  const courseGpx = await readFile(await courseFile.path(), 'utf8');
+  assert.match(courseGpx, /<trkpt lat="35\.8320000" lon="139\.0000000"\/>/);
+  assert.doesNotMatch(courseGpx, /openstreetmap\.org\/copyright/);
+  await course.mouse.click(...await pixel(course, [139.0961, 35.8098], okutama));
+  await course.getByText(/同じGPXの連続した線でつながりません/).waitFor();
+  await course.locator('.waypoints .point-row').nth(1).click();
+  await course.getByRole('button', { name: 'OSMとの接続点', exact: true }).click();
+  await resolved(course, 1);
+  assert.ok(graphRequests.length > 0);
+  const [mixedFile] = await Promise.all([
+    course.waitForEvent('download'), course.getByRole('button', { name: /GPXを書き出す/ }).click(),
+  ]);
+  const mixedGpx = await readFile(await mixedFile.path(), 'utf8');
+  assert.match(mixedGpx, /openstreetmap\.org\/copyright/);
+  assert.equal(mixedGpx.match(/<trkseg>/g)?.length, 1);
+  console.log('Reference routing: original GPX bend exported, OSM connection requires an explicit waypoint');
 } finally {
   await browser?.close();
   await new Promise((resolve) => server.httpServer.close(resolve));

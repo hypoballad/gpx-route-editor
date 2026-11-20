@@ -23,3 +23,15 @@ export function contains(bounds: Bounds, [lon, lat]: Point) {
 export function samePoint(a: Point, b: Point) {
   return a[0] === b[0] && a[1] === b[1];
 }
+
+export function projectToSegment(point: Point, a: Point, b: Point) {
+  const scale = Math.cos(point[1] * radians);
+  const dx = (b[0] - a[0]) * scale;
+  const dy = b[1] - a[1];
+  const square = dx * dx + dy * dy;
+  const position = square === 0 ? 0 : ((point[0] - a[0]) * scale * dx + (point[1] - a[1]) * dy) / square;
+  const fraction = Math.max(0, Math.min(1, position));
+  const projected: Point = fraction === 0 ? a : fraction === 1 ? b
+    : [a[0] + (b[0] - a[0]) * fraction, a[1] + dy * fraction];
+  return { fraction, projected };
+}

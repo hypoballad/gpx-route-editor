@@ -5,6 +5,7 @@ import { decode, Router } from '../src/routing/network.ts';
 import { createNetwork, wayPolicy, weights } from '../tools/osm/network.mjs';
 import { edit, emptyProject, insertWaypoint, legInput, manualLine, moveWaypoint, redo, setWaypoints, undo, updateLeg } from '../src/editor/model.ts';
 import { toGpx, trackSegments } from '../src/gpx/export.ts';
+import { attachTransfers, ReferenceNetwork } from '../src/routing/referenceNetwork.ts';
 import type { Bounds, Point } from '../src/geo.ts';
 
 const bounds: Bounds = { west: 138.97, east: 139.03, south: 35.77, north: 35.83 };
@@ -119,4 +120,36 @@ test('GPX preserves disconnected segments and escapes editor names', () => {
   assert.equal(exported.match(/<trkseg>/g)?.length, 2);
   assert.throws(() => toGpx([], 'empty', false));
   assert.deepEqual(trackSegments([lines[0], undefined, lines[1]]), [lines[0], lines[1]]);
+});
+
+test('reference exploration preserves GPX bends and reverse order and requires a designated transfer', () => {
+  const start = along(139);
+  const end = along(139.02);
+  const bend: Point = [139.01, 35.81];
+  const outside = along(139.03);
+  const network = new ReferenceNetwork([{ id: 'official', name: '大会.gpx', lines: [[start, bend, end]] }]);
+  assert.deepEqual(network.route({ from: start, to: end }, {})?.points, [start, bend, end]);
+  assert.deepEqual(network.route({ from: end, to: start }, {})?.points, [end, bend, start]);
+  assert.equal(network.route({ from: end, to: outside }, {})?.error, 'reference-link');
+  assert.equal(network.route({ from: end, to: outside }, { fromTransfer: true }), undefined);
+  const access: Point = [end[0], end[1] - 0.0001];
+  const input = { from: start, to: access };
+  const result = network.route(input, { toTransfer: true })!;
+  assert.deepEqual(attachTransfers(result, input, { toTransfer: true }).points, [start, bend, end, access]);
+});
+
+test('crossed or separated GPX lines stay disconnected and repeated positions need a choice', () => {
+  const cross = along(139.01);
+  const start = along(139);
+  const end = along(139.02);
+  const north: Point = [139.01, 35.81];
+  const south: Point = [139.01, 35.79];
+  const lines = new ReferenceNetwork([{ id: 'course', name: '大会.gpx', lines: [[start, cross, end], [north, cross, south]] }]);
+  assert.equal(lines.route({ from: start, to: north }, {})?.error, 'reference-link');
+  const loop = new ReferenceNetwork([{ id: 'loop', name: '周回.gpx', lines: [[start, cross, north, end, cross, south]] }]);
+  assert.equal(loop.pick(cross, () => true)?.id, undefined);
+  const ambiguous = loop.route({ from: cross, to: south }, {})!;
+  assert.equal(ambiguous.error, 'reference-choice');
+  const returning = ambiguous.fromOptions.find(({ reference }) => reference!.metersAlong > 2000)!;
+  assert.deepEqual(loop.route({ from: cross, to: south, fromChoice: returning.id }, {})?.points, [cross, south]);
 });
