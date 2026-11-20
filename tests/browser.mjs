@@ -518,15 +518,21 @@ try {
   console.log('Manual waypoint: placed, edited, relocated, exported, saved and removed from current GPX');
 
   const course = await desktop.newPage();
+  const courseErrors = [];
+  course.on('console', (message) => { if (message.type() === 'error' && /route-auto|route-border/.test(message.text())) courseErrors.push(message.text()); });
   await loaded(course);
   await course.getByRole('button', { name: '参考レイヤー', exact: true }).click();
   await course.locator('input[type=file]').setInputFiles({
     name: '大会コース.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(`
       <gpx xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>
         <trkpt lon="138.993" lat="35.818"/><trkpt lon="139.000" lat="35.832"/>
-        <trkpt lon="139.007614" lat="35.82804"/>
+        <trkpt lon="139.007614" lat="35.82804"/><trkpt lon="138.96" lat="35.78"/>
+        <trkpt lon="138.993" lat="35.818"/>
       </trkseg></trk></gpx>`),
   });
+  await course.getByRole('button', { name: '線の設定', exact: true }).click();
+  await course.getByLabel('線の色', { exact: true }).fill('#174bd1');
+  await course.getByText('#174bd1', { exact: true }).waitFor();
   await course.getByLabel('探索に使う').check();
   await course.getByRole('button', { name: 'ルート編集', exact: true }).click();
   await course.getByRole('button', { name: '奥多摩', exact: true }).click();
@@ -534,9 +540,11 @@ try {
   course.on('request', (request) => { if (request.url().includes('/graph/network-')) graphRequests.push(request.url()); });
   await course.mouse.click(...await pixel(course, [138.993, 35.818], okutama));
   await course.mouse.click(...await pixel(course, [139.007614, 35.82804], okutama));
-  await course.getByRole('button', { name: '区間 1：参考GPX', exact: true }).waitFor();
+  const courseLeg = course.getByRole('button', { name: '区間 1：参考GPX', exact: true });
+  await courseLeg.waitFor();
+  assert.notEqual(await courseLeg.locator('.line-key').evaluate((element) => getComputedStyle(element).borderTopColor), 'rgb(23, 75, 209)');
   assert.deepEqual(graphRequests, []);
-  assert.equal(await course.locator('.map-pin.road-anchor').count(), 2);
+  assert.equal(await course.locator('.map-pin.road-anchor').count(), 1);
   const [courseFile] = await Promise.all([
     course.waitForEvent('download'), course.getByRole('button', { name: /GPXを書き出す/ }).click(),
   ]);
@@ -555,7 +563,8 @@ try {
   const mixedGpx = await readFile(await mixedFile.path(), 'utf8');
   assert.match(mixedGpx, /openstreetmap\.org\/copyright/);
   assert.equal(mixedGpx.match(/<trkseg>/g)?.length, 1);
-  console.log('Reference routing: original GPX bend exported, OSM connection requires an explicit waypoint');
+  assert.deepEqual(courseErrors, []);
+  console.log('Reference routing: short path from shared start and finish, distinct route color, original GPX bend and explicit OSM connection');
 } finally {
   await browser?.close();
   await new Promise((resolve) => server.httpServer.close(resolve));

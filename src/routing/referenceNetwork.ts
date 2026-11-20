@@ -3,7 +3,7 @@ import type { Point } from '../geo.ts';
 import type { Candidate, RouteInput, RouteResult } from './protocol.ts';
 
 type Layer = { id: string; name: string; lines: Point[][] };
-type Run = { name: string; section: number; points: Point[] };
+type Run = { name: string; section: number; points: Point[]; length: number };
 type Edge = { id: string; run: Run; index: number; start: number; length: number };
 type Match = { candidate: Candidate; edge: Edge; location: number };
 type Policy = { fromTransfer?: boolean; toTransfer?: boolean; fromOsm?: boolean; toOsm?: boolean };
@@ -16,6 +16,14 @@ function addDistinct(points: Point[], point: Point) {
   if (!points.length || !samePoint(points.at(-1)!, point)) points.push(point);
 }
 
+function sameLoopEndpoint(a: Match, b: Match) {
+  if (a === b) return true;
+  const { run } = a.edge;
+  return run === b.edge.run && Math.min(a.location, b.location) <= 25
+    && Math.max(a.location, b.location) >= run.length - 25
+    && distance(run.points[0], run.points.at(-1)!) <= 10;
+}
+
 export class ReferenceNetwork {
   private cells = new Map<string, Edge[]>();
   private large: Edge[] = [];
@@ -23,7 +31,7 @@ export class ReferenceNetwork {
 
   constructor(layers: Layer[]) {
     for (const { id, name, lines } of layers) for (const [section, points] of lines.entries()) {
-      const run = { name, section: section + 1, points };
+      const run = { name, section: section + 1, points, length: 0 };
       let start = 0;
       for (let i = 0; i < points.length - 1; i++) {
         const [a, b] = [points[i], points[i + 1]];
@@ -47,6 +55,7 @@ export class ReferenceNetwork {
           else this.cells.set(key, [edge]);
         }
       }
+      run.length = start;
     }
   }
 
@@ -114,13 +123,21 @@ export class ReferenceNetwork {
     const to = endpoint(input.to, input.toChoice, policy.toOsm);
     if (!from.active.length && !to.active.length) return undefined;
     const options = { fromOptions: from.options.map(({ candidate }) => candidate), toOptions: to.options.map(({ candidate }) => candidate) };
-    const pairs = from.active.flatMap((a) => to.active.filter((b) => a.edge.run === b.edge.run).map((b) => ({ a, b })));
+    const pairs = from.active.flatMap((a) => to.active.filter((b) => a.edge.run === b.edge.run)
+      .map((b) => ({ a, b, length: Math.abs(a.location - b.location) })))
+      .sort((left, right) => left.length - right.length);
     if (!pairs.length) {
       if ((!from.active.length || policy.fromTransfer) && (!to.active.length || policy.toTransfer)) return undefined;
       return { ...options, error: 'reference-link', fromSnap: from.active[0]?.candidate, toSnap: to.active[0]?.candidate };
     }
-    if (pairs.length > 1) return { ...options, error: 'reference-choice' };
-    const [{ a, b }] = pairs;
+    const [best, next] = pairs;
+    // An outlying detour is often the other end of a loop at its start/finish.
+    // Keep a choice when both waypoints may be at that same location.
+    if (next && (best.length < 20 || next.length < Math.max(best.length * 3, best.length + 1000)
+      || pairs.slice(1).some(({ a, b }) => !sameLoopEndpoint(best.a, a) || !sameLoopEndpoint(best.b, b)))) {
+      return { ...options, error: 'reference-choice' };
+    }
+    const { a, b } = best;
     const [first, last] = a.location <= b.location ? [a, b] : [b, a];
     const points = [first.candidate.point];
     for (let i = first.edge.index + 1; i <= last.edge.index; i++) addDistinct(points, first.edge.run.points[i]);

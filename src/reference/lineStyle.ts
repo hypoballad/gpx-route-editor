@@ -17,6 +17,26 @@ export const referencePatterns = {
 export type LinePattern = keyof typeof referencePatterns;
 export type LineStyle = { width: number; color: string; pattern: LinePattern };
 export const referenceOutline = 3;
+export const defaultCourseColor = '#174bd1';
+const courseColors = [defaultCourseColor, '#a02178', '#a34b00', '#006ea1', '#5941a5'];
+
+export function courseColorAgainst(referenceColors: string[]) {
+  const channels = (color: string) => [1, 3, 5].map((start) => parseInt(color.slice(start, start + 2), 16));
+  const references = referenceColors.map(channels);
+  let best = defaultCourseColor;
+  let bestDistance = -1;
+  for (const color of courseColors) {
+    const rgb = channels(color);
+    const separation = Math.min(...references.map((other) =>
+      rgb.reduce((sum, channel, index) => sum + (channel - other[index]) ** 2, 0)));
+    if (separation >= 105 ** 2) return color;
+    if (separation > bestDistance) {
+      best = color;
+      bestDistance = separation;
+    }
+  }
+  return best;
+}
 const defaultLine: LineStyle = { width: 4, color: referencePalette[0].color, pattern: 'long' };
 const storageKey = 'gpx-route-editor-reference-line-v1';
 

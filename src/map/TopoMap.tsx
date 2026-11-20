@@ -21,7 +21,7 @@ export const regions = [
   { name: '富士山', center: [138.735, 35.370] as Point, zoom: 12.5 },
 ];
 
-type RouteLine = { id: string; mode: 'auto' | 'manual'; points: Point[] };
+type RouteLine = { id: string; mode: 'auto' | 'manual'; points: Point[]; referenceColor?: string };
 type Guide = { from: Point; to: Point };
 type Region = typeof regions[number];
 export type Viewport = { bounds: Bounds; zoom: number };
@@ -83,10 +83,15 @@ const style: StyleSpecification = {
       paint: { 'line-color': '#c72636', 'line-width': roadWidth - 1.5 } },
     { id: 'route-border', type: 'line', source: 'lines', filter: ['!=', ['get', 'mode'], 'guide'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#fffefa', 'line-width': ['case', ['get', 'selected'], 9, 7] } },
+      paint: { 'line-color': '#fffefa', 'line-width': ['case', ['has', 'referenceColor'],
+        ['case', ['get', 'selected'], 12, 10], ['case', ['get', 'selected'], 9, 7]] } },
     { id: 'route-auto', type: 'line', source: 'lines', filter: ['==', ['get', 'mode'], 'auto'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': '#087453', 'line-width': ['case', ['get', 'selected'], 6, 4] } },
+      paint: {
+        'line-color': ['coalesce', ['get', 'referenceColor'], '#087453'],
+        'line-width': ['case', ['has', 'referenceColor'],
+          ['case', ['get', 'selected'], 8, 6], ['case', ['get', 'selected'], 6, 4]],
+      } },
     { id: 'route-manual', type: 'line', source: 'lines', filter: ['==', ['get', 'mode'], 'manual'],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': '#a5530e', 'line-width': ['case', ['get', 'selected'], 6, 4], 'line-dasharray': [2, 1.2] } },
@@ -361,8 +366,8 @@ export function TopoMap(props: Props) {
     if (!instance) return;
     const sync = () => {
       const features: Feature<LineString>[] = [
-        ...props.lines.map(({ id, mode, points }): Feature<LineString> => ({
-          type: 'Feature', properties: { id, mode, selected: id === props.selectedLeg },
+        ...props.lines.map(({ id, mode, points, referenceColor }): Feature<LineString> => ({
+          type: 'Feature', properties: { id, mode, selected: id === props.selectedLeg, ...(referenceColor && { referenceColor }) },
           geometry: { type: 'LineString', coordinates: points },
         })),
         ...props.guides.map(({ from, to }): Feature<LineString> => ({

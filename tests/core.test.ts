@@ -6,6 +6,7 @@ import { createNetwork, wayPolicy, weights } from '../tools/osm/network.mjs';
 import { edit, emptyProject, insertWaypoint, legInput, manualLine, moveWaypoint, redo, setWaypoints, undo, updateLeg } from '../src/editor/model.ts';
 import { toGpx, trackSegments } from '../src/gpx/export.ts';
 import { attachTransfers, ReferenceNetwork } from '../src/routing/referenceNetwork.ts';
+import { courseColorAgainst, defaultCourseColor } from '../src/reference/lineStyle.ts';
 import type { Bounds, Point } from '../src/geo.ts';
 
 const bounds: Bounds = { west: 138.97, east: 139.03, south: 35.77, north: 35.83 };
@@ -152,4 +153,22 @@ test('crossed or separated GPX lines stay disconnected and repeated positions ne
   assert.equal(ambiguous.error, 'reference-choice');
   const returning = ambiguous.fromOptions.find(({ reference }) => reference!.metersAlong > 2000)!;
   assert.deepEqual(loop.route({ from: cross, to: south, fromChoice: returning.id }, {})?.points, [cross, south]);
+});
+
+test('at a shared start and finish, a nearby next waypoint does not require choosing a whole-course detour', () => {
+  const start = along(139);
+  const next = along(139.005);
+  const distant: Point = [139.05, 35.85];
+  const network = new ReferenceNetwork([{ id: 'loop', name: '大会.gpx', lines: [[start, next, distant, start]] }]);
+  const input = { from: start, to: next, toChoice: 'gpx:loop:0:0' };
+  const result = network.route(input, {})!;
+  assert.deepEqual(result.points, [start, next]);
+  assert.equal(result.fromOptions.filter(({ meters }) => meters === 0).length, 2);
+  assert.deepEqual(network.route({ ...input, fromChoice: 'gpx:loop:0:2' }, {})?.points, [start, distant, next]);
+  assert.equal(network.route({ from: start, to: start }, {})?.error, 'reference-choice');
+});
+
+test('the derived route picks a different color even when the reference uses its default blue', () => {
+  assert.equal(courseColorAgainst(['#065e68']), defaultCourseColor);
+  assert.notEqual(courseColorAgainst([defaultCourseColor]), defaultCourseColor);
 });

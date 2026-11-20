@@ -19,6 +19,7 @@ import type { ExportAttempt } from './Diagnostics.tsx';
 import { isManualWaypoint } from '../reference/WaypointForm.tsx';
 import type { WaypointDraft } from '../reference/WaypointForm.tsx';
 import { ReferenceNetwork } from '../routing/referenceNetwork.ts';
+import { courseColorAgainst } from '../reference/lineStyle.ts';
 
 type Action = 'add' | 'browse' | 'move' | 'insert' | 'vertex' | 'place';
 type Side = 'from' | 'to';
@@ -95,10 +96,15 @@ export function App() {
   const activeVertex = selected?.vertices.find((point) => point.id === vertexId);
   const geometry = useMemo(() => project.legs.map((leg, index) =>
     leg.mode === 'manual' ? manualLine(project, index) : results[index]?.points), [project, results]);
+  const courseColor = useMemo(() =>
+    courseColorAgainst(references.lineStyles.map(({ color }) => color)), [references.lineStyles]);
   const lines = useMemo(() => project.legs.flatMap((leg, index) => {
     const points = geometry[index];
-    return points ? [{ id: leg.id, mode: leg.mode, points }] : [];
-  }), [project.legs, geometry]);
+    return points ? [{
+      id: leg.id, mode: leg.mode, points,
+      referenceColor: results[index]?.referenceName ? courseColor : undefined,
+    }] : [];
+  }), [project.legs, geometry, results, courseColor]);
   const distances = new Map(lines.map((line) => [line.id, lineLength(line.points)]));
   const total = [...distances.values()].reduce((sum, length) => sum + length, 0);
   const incomplete = project.legs.flatMap((leg, index) => geometry[index] ? [] : [{
@@ -372,7 +378,7 @@ export function App() {
                 </button>
                 {leg && <button type="button" className={`leg-row ${leg.mode}`} aria-pressed={selected?.id === leg.id}
                   aria-label={`区間 ${index + 1}：${modeName}`} onClick={() => selectLeg(leg.id)}>
-                  <span className="line-key" aria-hidden="true" />
+                  <span className="line-key" aria-hidden="true" style={result?.referenceName ? { borderColor: courseColor } : undefined} />
                   <span>{modeName}</span>
                   <span className={result?.error ? 'error-text' : ''} data-testid={`leg-status-${index}`}>
                     {length !== undefined ? fileDistance(length) : result?.error ? '未解決' : '探索中…'}
