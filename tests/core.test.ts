@@ -118,4 +118,5 @@ test('GPX preserves disconnected segments and escapes editor names', () => {
   assert.match(exported, /openstreetmap\.org\/copyright/);
   assert.equal(exported.match(/<trkseg>/g)?.length, 2);
   assert.throws(() => toGpx([], 'empty', false));
+  assert.deepEqual(trackSegments([lines[0], undefined, lines[1]]), [lines[0], lines[1]]);
 });

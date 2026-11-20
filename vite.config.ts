@@ -9,7 +9,10 @@ const versionedManifest = `graph/manifest-${revision}.json`;
 export default defineConfig(({ command }) => ({
   base: './',
   worker: { format: 'es' },
-  define: { __GRAPH_MANIFEST_PATH__: JSON.stringify(command === 'build' ? versionedManifest : 'graph/manifest.json') },
+  define: {
+    __GRAPH_MANIFEST_PATH__: JSON.stringify(command === 'build' ? versionedManifest : 'graph/manifest.json'),
+    __APP_REVISION__: JSON.stringify(process.env.GITHUB_SHA?.slice(0, 12) ?? 'local'),
+  },
   plugins: [{
     name: 'versioned-graph-manifest',
     apply: 'build',

@@ -8,19 +8,25 @@ function xml(value: string) {
   })[match]!);
 }
 
-export function trackSegments(lines: Point[][]) {
+export function trackSegments(lines: readonly (Point[] | undefined)[]) {
   const segments: Point[][] = [];
+  let previous: Point[] | undefined;
   for (const line of lines) {
-    if (line.length < 2) continue;
-    const previous = segments.at(-1);
+    if (!line || line.length < 2) {
+      previous = undefined;
+      continue;
+    }
     if (previous && samePoint(previous.at(-1)!, line[0])) {
       for (let index = 1; index < line.length; index++) previous.push(line[index]);
-    } else segments.push([...line]);
+    } else {
+      previous = [...line];
+      segments.push(previous);
+    }
   }
   return segments;
 }
 
-export function toGpx(lines: Point[][], name: string, usesOsm: boolean, waypoints: Place[] = []) {
+export function toGpx(lines: readonly (Point[] | undefined)[], name: string, usesOsm: boolean, waypoints: Place[] = []) {
   const segments = trackSegments(lines);
   if (!segments.length && !waypoints.length) throw new Error('GPX needs at least one resolved segment or waypoint');
   const sources = usesOsm
@@ -44,6 +50,12 @@ export function downloadGpx(contents: string, name: string) {
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = `${name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 100)}.gpx`;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  anchor.hidden = true;
+  document.body.append(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
 }

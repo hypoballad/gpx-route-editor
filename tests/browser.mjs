@@ -303,7 +303,35 @@ try {
     await resolved(delayed, 1);
     assert.equal(await delayed.getByTestId('leg-status-0').textContent(), '未解決');
     assert.equal(await delayed.getByRole('button', { name: /GPXを書き出す/ }).isEnabled(), false);
-    console.log('Chrome: stale routes discarded after moving a waypoint during loading; unresolved leg did not block manual editing');
+    const review = delayed.getByRole('region', { name: 'GPXの書き出し状況' });
+    await review.getByRole('button', { name: '区間 1（地点 1 → 2）' }).click();
+    const legEditor = delayed.getByRole('region', { name: '選択した区間の編集' });
+    await legEditor.getByText(/50 m以内に吸着先がありません/).waitFor();
+    const [partial] = await Promise.all([
+      delayed.waitForEvent('download'), review.getByRole('button', { name: '確定済みの区間だけ保存' }).click(),
+    ]);
+    assert.match(partial.suggestedFilename(), /確定済み区間のみ/);
+    const text = await readFile(await partial.path(), 'utf8');
+    assert.equal(text.match(/<trkseg>/g)?.length, 1);
+    await delayed.evaluate(() => Object.defineProperty(navigator, 'clipboard', {
+      configurable: true, value: { writeText: () => Promise.reject(new Error('Clipboard blocked')) },
+    }));
+    await review.getByRole('button', { name: 'GPXの内容をコピー' }).click();
+    assert.equal(await review.getByLabel('GPXの内容をコピー用のテキスト').inputValue(), text);
+    await delayed.getByText('診断モード', { exact: true }).click();
+    const diagnostic = delayed.locator('.diagnostics');
+    const copy = diagnostic.getByRole('button', { name: '診断情報をコピー' });
+    const report = diagnostic.getByLabel('診断情報をコピー用のテキスト');
+    await copy.click();
+    const privateReport = JSON.parse(await report.inputValue());
+    assert.equal(privateReport.legs[0].result, 'snap');
+    assert.equal(privateReport.legs[1].result, 'resolved');
+    assert.equal(privateReport.legs[0].coordinates, undefined);
+    assert.equal(privateReport.export.lastAttempt.status, 'download-requested');
+    await diagnostic.getByLabel('正確な座標を含める').check();
+    await copy.click();
+    assert.ok(JSON.parse(await report.inputValue()).legs[0].coordinates.from.length === 2);
+    console.log('Chrome: unresolved section jump, partial GPX, clipboard fallback and coordinate opt-in');
   } finally {
     release();
   }

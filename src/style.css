@@ -52,6 +52,8 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .export span { display: inline-block; padding-left: 9px; font-size: 17px; }
 .export:not(:disabled):hover { background: #f0f8e6; }
 .export:disabled { color: #d3e0cf; border-color: #617969; background: #38564a; }
+.export-control { display: grid; justify-items: end; gap: 2px; }
+.export-control small { color: #ffe0b2; font-size: 11px; }
 .pwa-update {
   display: flex; align-items: center; justify-content: space-between; gap: 8px 14px;
   padding: 6px 15px; background: #e6efda; border-bottom: 1px solid #b8ceb1; font-size: 12px;
@@ -191,10 +193,25 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .section-actions, .snap-review { margin-top: 8px; }
 .section-panel button[aria-pressed="true"] { background: #e1ecdc; border-color: #aabcaa; }
 .choices { display: flex; width: 100%; flex-wrap: wrap; gap: 5px; }
-.muted, .error-text, .notice { font-size: 11px; margin: 8px 0 0; color: var(--muted); }
+.muted, .error-text { font-size: 11px; margin: 8px 0 0; color: var(--muted); }
 .error-text { color: #9a3b27; }
-.notice { padding: 0 21px 8px; }
-.notice:empty { display: none; }
+.export-review, .diagnostics {
+  padding: 9px 12px; margin: 8px 12px; border: 1px solid var(--line); border-radius: 7px;
+  font-size: 12px; background: #f5f6ef; overflow-wrap: anywhere;
+}
+.export-review p, .diagnostics p { margin: 0 0 6px; }
+.export-issues { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.export-review button, .diagnostics button {
+  min-height: 32px; max-width: 100%; border: 1px solid #bacbbb; border-radius: 5px;
+  padding: 3px 7px; background: #fffef5; font-size: 12px;
+}
+.export-review button:hover, .diagnostics button:hover { background: #e9f0e1; }
+.export-result:not(:first-child) { margin-top: 8px; }
+.diagnostics summary { cursor: pointer; font-weight: 700; }
+.diagnostics label { display: block; margin: 0 0 6px; }
+.diagnostics[open] summary { margin-bottom: 7px; }
+.copy-status:not(:empty) { display: block; margin-top: 4px; }
+.export-review textarea, .diagnostics textarea { display: block; width: 100%; margin-top: 4px; resize: vertical; }
 
 .map-workspace { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
 .map-shell { position: relative; min-width: 0; min-height: 0; background: #e8ece2; isolation: isolate; }

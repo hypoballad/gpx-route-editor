@@ -13,6 +13,9 @@ import { useReferences } from '../reference/useReferences.ts';
 import type { Place } from '../reference/import.ts';
 import { ElevationPanel } from './ElevationPanel.tsx';
 import { PwaUpdate } from './PwaUpdate.tsx';
+import { CopyText } from './CopyText.tsx';
+import { Diagnostics } from './Diagnostics.tsx';
+import type { ExportAttempt } from './Diagnostics.tsx';
 import { isManualWaypoint } from '../reference/WaypointForm.tsx';
 import type { WaypointDraft } from '../reference/WaypointForm.tsx';
 
@@ -62,7 +65,7 @@ export function App() {
   const [waypointId, setWaypointId] = useState<string>();
   const [vertexId, setVertexId] = useState<string>();
   const [candidateSide, setCandidateSide] = useState<Side>();
-  const [notice, setNotice] = useState('');
+  const [exportAttempt, setExportAttempt] = useState<ExportAttempt>();
   const [panel, setPanel] = useState<'route' | 'reference'>('route');
   const [referenceFocus, setReferenceFocus] = useState<{ bounds: Bounds }>();
   const [selectedPlace, setSelectedPlace] = useState<Place>();
@@ -70,6 +73,7 @@ export function App() {
   const [waypointDraft, setWaypointDraft] = useState<WaypointDraft>();
   const [elevationPoint, setElevationPoint] = useState<Point>();
   const mapShell = useRef<HTMLElement>(null);
+  const legEditor = useRef<HTMLElement>(null);
   const references = useReferences(viewport?.bounds);
   const mapPlaces = useMemo(() => {
     const manual = exportPlaces.filter(isManualWaypoint);
@@ -85,13 +89,21 @@ export function App() {
   const activeRoute = results[selectedIndex];
   const activeWaypoint = project.waypoints.findIndex((point) => point.id === waypointId);
   const activeVertex = selected?.vertices.find((point) => point.id === vertexId);
+  const geometry = useMemo(() => project.legs.map((leg, index) =>
+    leg.mode === 'manual' ? manualLine(project, index) : results[index]?.points), [project, results]);
   const lines = useMemo(() => project.legs.flatMap((leg, index) => {
-    const points = leg.mode === 'manual' ? manualLine(project, index) : results[index]?.points;
+    const points = geometry[index];
     return points ? [{ id: leg.id, mode: leg.mode, points }] : [];
-  }), [project, results]);
+  }), [project.legs, geometry]);
   const distances = new Map(lines.map((line) => [line.id, lineLength(line.points)]));
   const total = [...distances.values()].reduce((sum, length) => sum + length, 0);
-  const canExport = lines.length === project.legs.length && (lines.length > 0 || exportPlaces.length > 0);
+  const incomplete = project.legs.flatMap((leg, index) => geometry[index] ? [] : [{
+    id: leg.id, index, error: results[index]?.error,
+  }]);
+  const failed = incomplete.filter(({ error }) => error);
+  const pending = incomplete.length - failed.length;
+  const canExport = !incomplete.length && (lines.length > 0 || exportPlaces.length > 0);
+  const partialAvailable = failed.length > 0 && pending === 0 && lines.length > 0;
   const outputLines = useMemo(() => lines.map(({ points }) => points), [lines]);
   const fileSegments = canExport ? trackSegments(outputLines).length : 0;
   const guides = useMemo(() => project.legs.flatMap((leg, index) => {
@@ -108,7 +120,7 @@ export function App() {
   })) : [], [candidateList, candidateSide]);
 
   const commit = (change: (previous: Project) => Project) => {
-    setNotice('');
+    setExportAttempt(undefined);
     setHistory((previous) => edit(previous, change(previous.present)));
   };
 
@@ -117,6 +129,35 @@ export function App() {
     setVertexId(undefined);
     setCandidateSide(undefined);
     setAction('browse');
+  }
+
+  function reviewLeg(id: string) {
+    selectLeg(id);
+    setPanel('route');
+    window.requestAnimationFrame(() => {
+      legEditor.current?.scrollIntoView({ block: 'nearest' });
+      legEditor.current?.focus({ preventScroll: true });
+    });
+  }
+
+  function exportGpx(kind: ExportAttempt['kind']) {
+    const label = name.trim() || '登山ルート';
+    const suffix = '（確定済み区間のみ）';
+    const title = kind === 'partial' ? label.slice(0, 100 - suffix.length) + suffix : label;
+    let contents: string;
+    try {
+      contents = toGpx(geometry, title, lines.some(({ mode }) => mode === 'auto'), exportPlaces);
+    } catch {
+      setExportAttempt({ kind, status: 'generation-error' });
+      return;
+    }
+    let status: ExportAttempt['status'] = 'download-requested';
+    try {
+      downloadGpx(contents, title);
+    } catch {
+      status = 'download-error';
+    }
+    setExportAttempt({ kind, status, contents });
   }
 
   function selectWaypoint(id: string) {
@@ -223,7 +264,7 @@ export function App() {
     setHistory(direction === 'undo' ? undo : redo);
     setAction('browse');
     setCandidateSide(undefined);
-    setNotice('');
+    setExportAttempt(undefined);
   }
 
   const hint = {
@@ -244,11 +285,13 @@ export function App() {
       <div className="brand"><span className="brand-icon" aria-hidden="true"><span /></span>
         <div><h1>登山ルートエディタ</h1><p>地理院地図で計画を描く</p></div>
       </div>
-      <button type="button" className="export" disabled={!canExport} onClick={() => {
-        const title = name.trim() || '登山ルート';
-        downloadGpx(toGpx(outputLines, title, lines.some(({ mode }) => mode === 'auto'), exportPlaces), title);
-        setNotice('GPXを書き出しました。');
-      }}>GPXを書き出す <span aria-hidden="true">↓</span></button>
+      <div className="export-control">
+        <button type="button" className="export" disabled={!canExport}
+          aria-describedby={incomplete.length ? 'export-blocked' : undefined}
+          onClick={() => exportGpx('full')}>GPXを書き出す <span aria-hidden="true">↓</span></button>
+        {incomplete.length > 0 && <small id="export-blocked">{failed.length
+          ? `未解決 ${failed.length} 区間` : `探索中 ${pending} 区間`}</small>}
+      </div>
     </header>
     <PwaUpdate hasEditing={!!(project.waypoints.length || exportPlaces.length || references.layers.length || waypointDraft)
       || name !== '登山ルート'} />
@@ -259,6 +302,28 @@ export function App() {
           <button type="button" aria-pressed={panel === 'route'} onClick={() => setPanel('route')}>ルート編集</button>
           <button type="button" aria-pressed={panel === 'reference'} onClick={() => setPanel('reference')}>参考レイヤー</button>
         </nav>
+        {(failed.length > 0 || exportAttempt) && <section className="export-review" aria-label="GPXの書き出し状況">
+          {failed.length > 0 && <>
+            <p>全区間をGPXに書き出すには、未解決の区間を確認してください。</p>
+            <div className="export-issues">
+              {failed.map(({ id, index }) => <button type="button" key={id} onClick={() => reviewLeg(id)}>
+                区間 {index + 1}（地点 {index + 1} → {index + 2}）
+              </button>)}
+            </div>
+            {partialAvailable && <>
+              <p>未解決の区間を飛ばし、確定済みの区間だけ別ファイルに保存できます。</p>
+              <button type="button" onClick={() => exportGpx('partial')}>確定済みの区間だけ保存</button>
+            </>}
+          </>}
+          {exportAttempt && <div className="export-result">
+            <p role="status">{exportAttempt.status === 'download-requested'
+              ? 'ブラウザにダウンロードを要求しました。ファイルが見つからない場合は、GPXの内容をコピーできます。'
+              : exportAttempt.status === 'download-error' ? 'ダウンロードを開始できませんでした。GPXの内容をコピーできます。'
+                : 'GPXファイルを作成できませんでした。'}</p>
+            {exportAttempt.contents !== undefined && <CopyText key={exportAttempt.contents} label="GPXの内容をコピー"
+              text={() => exportAttempt.contents!} />}
+          </div>}
+        </section>}
         <div hidden={panel !== 'route'}>
         <div className="editor-top">
           <label className="name-label" htmlFor="route-name">ルート名</label>
@@ -321,7 +386,7 @@ export function App() {
             }}>地点を削除</button>
           </div>}
         </div>
-        {selected && <section className="section-panel" aria-label="選択した区間の編集">
+        {selected && <section ref={legEditor} tabIndex={-1} className="section-panel" aria-label="選択した区間の編集">
           <div className="section-title"><h2>区間 {selectedIndex + 1}</h2>
             <span className={`chip ${selected.mode}`}>{selected.mode === 'auto' ? '自動探索' : '手描き'}</span></div>
           {activeRoute?.error && <p className="error-text" role="status">{errors[activeRoute.error]}</p>}
@@ -367,7 +432,8 @@ export function App() {
           onSelect={selectPlace} onFocus={(bounds) => setReferenceFocus({ bounds })}
           onFocusPlace={({ point: [lon, lat] }) => setReferenceFocus({ bounds: { west: lon, east: lon, south: lat, north: lat } })}
           onAddWaypoint={addReferenceWaypoint} onToggleExport={toggleExport} />}
-        <p className="notice" aria-live="polite">{notice}</p>
+        <Diagnostics project={project} results={results} geometry={geometry} canExport={canExport}
+          partialAvailable={partialAvailable} exportAttempt={exportAttempt} />
       </aside>
 
       <div className="map-workspace">
