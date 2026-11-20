@@ -1,0 +1,10 @@
+{
+  "upstream": "https://download.openstreetmap.fr/extracts/asia/japan/",
+  "timestamp": "2026-11-19T00:13:50Z",
+  "files": [
+    { "name": "kanto-latest.osm.pbf", "sha256": "0257fb84fc6c5001b167a0b132c83499d3f526a8e6e5c4d29ca1a2c27d5ee461" },
+    { "name": "chubu-latest.osm.pbf", "sha256": "6873e9b1c6f77cf9927620d05d7d4d658efecb951efb344501b9cf245e96afa2" }
+  ],
+  "bounds": { "west": 138.52, "south": 35.25, "east": 139.26, "north": 36.08 },
+  "bufferMeters": 3000
+}

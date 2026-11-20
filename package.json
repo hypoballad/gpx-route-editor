@@ -1,0 +1,29 @@
+{
+  "name": "gpx-route-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run check:graph && tsc --noEmit && vite build && node tools/pwa/build.mjs",
+    "preview": "vite preview",
+    "graph": "node tools/osm/build.mjs",
+    "check:graph": "node tools/osm/verify-asset.mjs",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/*.test.ts",
+    "test:browser": "node tests/browser.mjs",
+    "test:pwa": "node tests/pwa.mjs",
+    "test:region": "node --experimental-strip-types --disable-warning=ExperimentalWarning tests/region.ts"
+  },
+  "dependencies": {
+    "maplibre-gl": "^6.19.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "playwright-core": "^1.55.0",
+    "typescript": "~5.9.0",
+    "vite": "^7.0.0"
+  }
+}

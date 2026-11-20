@@ -1,0 +1,48 @@
+{
+  "format": 2,
+  "profile": 1,
+  "file": "network-68ed8f16d32c3591.bin.gz",
+  "sha256": "7383b27daf5b5e3284e1b15fbb6e2a408d9f3b44f10dae39cfc57acfdfd97bf4",
+  "archiveSha256": "68ed8f16d32c3591b0120dde37ee7756b2556ce35fe5a7b46e938b3d38b39fae",
+  "bytes": 6629197,
+  "decodedBytes": 11398166,
+  "nodes": 1631048,
+  "edges": 3394614,
+  "ways": 182187,
+  "clippedSegments": 20020,
+  "blockedNodes": 1129,
+  "weights": [
+    1,
+    1.45,
+    2,
+    3,
+    4
+  ],
+  "coverage": {
+    "west": 138.52,
+    "south": 35.25,
+    "east": 139.26,
+    "north": 36.08
+  },
+  "graphBounds": {
+    "west": 138.48654729827328,
+    "south": 35.222972972972975,
+    "east": 139.29345270172672,
+    "north": 36.10702702702702
+  },
+  "bufferMeters": 3000,
+  "timestamp": "2026-11-19T00:13:50Z",
+  "sources": [
+    {
+      "name": "kanto-latest.osm.pbf",
+      "sha256": "0257fb84fc6c5001b167a0b132c83499d3f526a8e6e5c4d29ca1a2c27d5ee461"
+    },
+    {
+      "name": "chubu-latest.osm.pbf",
+      "sha256": "6873e9b1c6f77cf9927620d05d7d4d658efecb951efb344501b9cf245e96afa2"
+    }
+  ],
+  "upstream": "https://download.openstreetmap.fr/extracts/asia/japan/",
+  "attribution": "© OpenStreetMap contributors",
+  "license": "https://opendatacommons.org/licenses/odbl/1-0/"
+}
