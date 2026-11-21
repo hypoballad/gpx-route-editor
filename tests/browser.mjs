@@ -553,8 +553,8 @@ try {
   assert.doesNotMatch(courseGpx, /openstreetmap\.org\/copyright/);
   await course.mouse.click(...await pixel(course, [139.0961, 35.8098], okutama));
   await course.getByText(/同じGPXの連続した線でつながりません/).waitFor();
-  await course.locator('.waypoints .point-row').nth(1).click();
-  await course.getByRole('button', { name: 'OSMとの接続点', exact: true }).click();
+  await course.getByRole('button', { name: /地点 2 を接続点にする/ }).click();
+  assert.equal(await course.locator('.waypoints .point-row').nth(1).getByText('接続点', { exact: true }).count(), 1);
   await resolved(course, 1);
   assert.ok(graphRequests.length > 0);
   const [mixedFile] = await Promise.all([

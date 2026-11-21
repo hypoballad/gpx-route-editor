@@ -18,7 +18,7 @@ import { Diagnostics } from './Diagnostics.tsx';
 import type { ExportAttempt } from './Diagnostics.tsx';
 import { isManualWaypoint } from '../reference/WaypointForm.tsx';
 import type { WaypointDraft } from '../reference/WaypointForm.tsx';
-import { ReferenceNetwork } from '../routing/referenceNetwork.ts';
+import { ReferenceNetwork, transferMeters } from '../routing/referenceNetwork.ts';
 import { courseColorAgainst } from '../reference/lineStyle.ts';
 
 type Action = 'add' | 'browse' | 'move' | 'insert' | 'vertex' | 'place';
@@ -92,6 +92,13 @@ export function App() {
   const selected = project.legs.find((leg) => leg.id === legId) ?? project.legs.at(-1);
   const selectedIndex = selected ? project.legs.indexOf(selected) : -1;
   const activeRoute = results[selectedIndex];
+  const transferSuggestions = activeRoute?.error === 'reference-link'
+    ? [activeRoute.fromSnap, activeRoute.toSnap].flatMap((snap, offset) => {
+      const index = selectedIndex + offset;
+      const waypoint = project.waypoints[index];
+      return snap?.reference && snap.meters <= transferMeters && waypoint && !waypoint.transfer
+        ? [{ index, waypoint, meters: Math.round(snap.meters) }] : [];
+    }) : [];
   const activeWaypoint = project.waypoints.findIndex((point) => point.id === waypointId);
   const activeVertex = selected?.vertices.find((point) => point.id === vertexId);
   const geometry = useMemo(() => project.legs.map((leg, index) =>
@@ -148,6 +155,11 @@ export function App() {
       legEditor.current?.scrollIntoView({ block: 'nearest' });
       legEditor.current?.focus({ preventScroll: true });
     });
+  }
+
+  function toggleTransfer(id: string) {
+    commit((previous) => setWaypoints(previous, previous.waypoints.map((point) =>
+      point.id === id ? { ...point, transfer: !point.transfer } : point)));
   }
 
   function exportGpx(kind: ExportAttempt['kind']) {
@@ -390,10 +402,8 @@ export function App() {
           {activeWaypoint >= 0 && <div className="point-actions" aria-label="選択した経由地点">
             <button type="button" onClick={() => { setAction('move'); setCandidateSide(undefined); }}>地点を移動</button>
             {(references.routingLayers.length > 0 || project.waypoints[activeWaypoint].transfer) && <button type="button"
-              aria-pressed={!!project.waypoints[activeWaypoint].transfer} onClick={() => {
-                commit((previous) => setWaypoints(previous, previous.waypoints.map((point) =>
-                  point.id === waypointId ? { ...point, transfer: !point.transfer } : point)));
-              }}>OSMとの接続点</button>}
+              aria-pressed={!!project.waypoints[activeWaypoint].transfer}
+              onClick={() => toggleTransfer(project.waypoints[activeWaypoint].id)}>OSMとの接続点</button>}
             <button type="button" aria-label="地点を前へ" disabled={activeWaypoint === 0} onClick={() => changeWaypointOrder(-1)}>↑</button>
             <button type="button" aria-label="地点を後へ" disabled={activeWaypoint + 1 === project.waypoints.length} onClick={() => changeWaypointOrder(1)}>↓</button>
             <button type="button" className="delete" onClick={() => {
@@ -408,6 +418,12 @@ export function App() {
           <div className="section-title"><h2>区間 {selectedIndex + 1}</h2>
             <span className={`chip ${selected.mode}`}>{selected.mode === 'manual' ? '手描き' : activeRoute?.referenceName ? '参考GPX' : '自動探索'}</span></div>
           {activeRoute?.error && <p className="error-text" role="status">{errors[activeRoute.error]}</p>}
+          {transferSuggestions.length > 0 && <div className="section-actions">
+            {transferSuggestions.map(({ index, waypoint, meters }) => <button type="button" key={waypoint.id}
+              onClick={() => toggleTransfer(waypoint.id)}>
+              地点 {index + 1} を接続点にする（GPXまで {meters} m）
+            </button>)}
+          </div>}
           {activeRoute?.referenceName && <p className="muted">参考GPX · {activeRoute.referenceName}</p>}
           {(project.waypoints[selectedIndex].transfer || project.waypoints[selectedIndex + 1].transfer) &&
             <p className="muted">接続点と道の間は、50 m以内の短い直線でつなぎます。</p>}
